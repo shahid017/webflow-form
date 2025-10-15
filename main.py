@@ -1,8 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+import os
+from dotenv import load_dotenv
 from pdf_generator import PDFGenerator
 from fax_sender import FaxSender
 from config import PHARMACY_FAX_NUMBER
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
