@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: webflow-fax-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SINCH_ACCESS_KEY
+        sync: false
+      - key: SINCH_ACCESS_SECRET
+        sync: false
+      - key: SINCH_PROJECT_ID
+        sync: false
+      - key: PHARMACY_FAX_NUMBER
+        value: 17057415595
+      - key: PDF_SAVE_DIR
+        value: generated_pdfs
+      - key: CALLBACK_URL
+        sync: false
