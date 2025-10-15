@@ -62,11 +62,22 @@ async def send_fax(request: Request):
     and sends it as a fax using the Sinch API.
     """
     try:
-        # Get raw JSON data from request
-        raw_data = await request.json()
+        # Get content type to determine how to parse the data
+        content_type = request.headers.get("content-type", "")
+        
+        # Parse data based on content type
+        if "application/json" in content_type:
+            raw_data = await request.json()
+            print(f"Received JSON data: {raw_data}")
+        else:
+            # Handle form-encoded data (application/x-www-form-urlencoded)
+            form_data = await request.form()
+            raw_data = dict(form_data)
+            print(f"Received form data: {raw_data}")
         
         # Log the incoming data for debugging
-        print(f"Received form data: {raw_data}")
+        print(f"Content-Type: {content_type}")
+        print(f"Parsed data: {raw_data}")
         
         # Map common Webflow field variations to our expected format
         data = {}
@@ -78,9 +89,9 @@ async def send_fax(request: Request):
             'OR-Phone-number': ['OR-Phone-number', 'OR_Phone_number', 'phone_number', 'phoneNumber', 'phone', 'telephone'],
             'OR-Medication': ['OR-Medication', 'OR_Medication', 'medication', 'medications', 'drugs'],
             'OR-note': ['OR-note', 'OR_note', 'note', 'notes', 'special_instructions', 'comments'],
-            'delivery_option': ['delivery_option', 'deliveryOption', 'delivery', 'pickup_option'],
-            'address': ['address', 'delivery_address', 'deliveryAddress', 'street_address'],
-            'time_slot': ['time_slot', 'timeSlot', 'preferred_time', 'time_preference']
+            'delivery_option': ['OR-Delivery-or-Pick-up', 'delivery_option', 'deliveryOption', 'delivery', 'pickup_option'],
+            'address': ['Form-transfer', 'address', 'delivery_address', 'deliveryAddress', 'street_address'],
+            'time_slot': ['OR-Tomorrow-delivery-time', 'time_slot', 'timeSlot', 'preferred_time', 'time_preference']
         }
         
         # Try to map each expected field
@@ -262,10 +273,24 @@ async def debug_form_data(request: Request):
     Use this to troubleshoot form field mapping issues.
     """
     try:
-        raw_data = await request.json()
+        # Get content type to determine how to parse the data
+        content_type = request.headers.get("content-type", "")
+        
+        # Parse data based on content type
+        if "application/json" in content_type:
+            raw_data = await request.json()
+            data_source = "JSON"
+        else:
+            # Handle form-encoded data (application/x-www-form-urlencoded)
+            form_data = await request.form()
+            raw_data = dict(form_data)
+            data_source = "Form Data"
+        
         return {
             "status": "debug",
             "message": "Form data received successfully",
+            "content_type": content_type,
+            "data_source": data_source,
             "received_data": raw_data,
             "field_names": list(raw_data.keys()) if isinstance(raw_data, dict) else "Not a dictionary",
             "data_types": {k: type(v).__name__ for k, v in raw_data.items()} if isinstance(raw_data, dict) else "Not a dictionary"
@@ -273,7 +298,8 @@ async def debug_form_data(request: Request):
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Error processing request: {str(e)}"
+            "message": f"Error processing request: {str(e)}",
+            "content_type": request.headers.get("content-type", "unknown")
         }
 
 @app.get("/", response_model=HealthResponse)
