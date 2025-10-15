@@ -12,6 +12,7 @@ from config import (
     SINCH_FAX_API_URL,
     CALLBACK_URL
 )
+from file_hosting import SimpleFileHost
 
 
 class FaxSender:
@@ -30,16 +31,16 @@ class FaxSender:
         self.access_secret = access_secret or SINCH_ACCESS_SECRET
         self.project_id = project_id or SINCH_PROJECT_ID
         self.fax_api_url = f"{SINCH_FAX_API_URL}/{self.project_id}/faxes"
+        self.file_host = SimpleFileHost()
     
     def send_pdf_as_fax(self, pdf_path: str, fax_number: str, filename: str = "document.pdf") -> Dict[str, Any]:
         """
         Send PDF file as fax using Sinch API.
         
-        For now, this uses a publicly accessible PDF URL for testing.
-        In production, you would need to upload the PDF to a public URL or use a file hosting service.
+        This uploads the generated PDF to a public hosting service and then sends it via fax.
         
         Args:
-            pdf_path: Path to the PDF file (not used in current implementation)
+            pdf_path: Path to the PDF file to send
             fax_number: Destination fax number
             filename: Name for the fax file
             
@@ -47,13 +48,36 @@ class FaxSender:
             Dictionary with response status and details
         """
         try:
+            # Check if PDF file exists
+            if not os.path.exists(pdf_path):
+                return {
+                    "success": False,
+                    "error": f"PDF file not found: {pdf_path}",
+                    "fax_number": fax_number,
+                    "filename": filename
+                }
+            
+            print(f"📄 Uploading PDF to public hosting service...")
+            print(f"📁 PDF path: {pdf_path}")
+            
+            # Upload PDF to get a public URL
+            upload_result = self.file_host.upload_pdf(pdf_path)
+            
+            if not upload_result["success"]:
+                return {
+                    "success": False,
+                    "error": f"Failed to upload PDF: {upload_result['error']}",
+                    "fax_number": fax_number,
+                    "filename": filename
+                }
+            
+            content_url = upload_result["public_url"]
+            print(f"✅ PDF uploaded successfully!")
+            print(f"🔗 Public URL: {content_url}")
+            
             # Create basic auth header
             credentials = f"{self.access_key}:{self.access_secret}"
             encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-            
-            # For testing, use a publicly accessible PDF URL
-            # In production, you would need to upload your PDF to a public URL
-            content_url = "https://developers.sinch.com/fax/fax.pdf"
             
             # Prepare fax payload
             payload = {
@@ -95,6 +119,87 @@ class FaxSender:
                     "fax_number": fax_number,
                     "filename": filename,
                     "content_url": content_url
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Fax request failed: {response.status_code} - {response.text}",
+                    "fax_number": fax_number,
+                    "filename": filename
+                }
+            
+        except requests.RequestException as e:
+            return {
+                "success": False,
+                "error": f"Network error: {str(e)}",
+                "fax_number": fax_number,
+                "filename": filename
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Unexpected error: {str(e)}",
+                "fax_number": fax_number,
+                "filename": filename
+            }
+    
+    def send_pdf_with_url(self, pdf_url: str, fax_number: str, filename: str = "document.pdf") -> Dict[str, Any]:
+        """
+        Send PDF via fax using a public URL.
+        
+        Args:
+            pdf_url: Public URL to the PDF file
+            fax_number: Destination fax number
+            filename: Name for the fax file
+            
+        Returns:
+            Dictionary with response status and details
+        """
+        try:
+            # Create basic auth header
+            credentials = f"{self.access_key}:{self.access_secret}"
+            encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
+            
+            # Prepare fax payload
+            payload = {
+                "to": fax_number,
+                "contentUrl": pdf_url
+            }
+            
+            # Add callback URL if configured
+            if CALLBACK_URL:
+                payload["callbackUrl"] = CALLBACK_URL
+            
+            # Prepare headers
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Basic {encoded_credentials}'
+            }
+            
+            print(f"📤 Sending fax to {fax_number}...")
+            print(f"🔗 Using PDF URL: {pdf_url}")
+            print(f"📋 Payload: {payload}")
+            
+            # Send fax request
+            response = requests.post(
+                self.fax_api_url,
+                headers=headers,
+                json=payload
+            )
+            
+            print(f"📡 Response status: {response.status_code}")
+            print(f"📄 Response text: {response.text}")
+            
+            if response.status_code in [200, 201]:
+                data = response.json()
+                return {
+                    "success": True,
+                    "status_code": response.status_code,
+                    "fax_id": data.get("id"),
+                    "response_data": data,
+                    "fax_number": fax_number,
+                    "filename": filename,
+                    "content_url": pdf_url
                 }
             else:
                 return {

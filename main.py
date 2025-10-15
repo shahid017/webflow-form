@@ -3,8 +3,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import os
+import tempfile
 from pdf_generator import generate_pdf
 from fax_sender import FaxSender
 from config import PHARMACY_FAX_NUMBER
@@ -21,6 +22,23 @@ app = FastAPI(
 # Initialize services
 fax_sender = FaxSender()
 
+# Store temporary PDFs for serving
+temp_pdfs = {}
+
+@app.get("/pdf/{pdf_id}")
+async def serve_pdf(pdf_id: str):
+    """Serve a PDF file by ID."""
+    if pdf_id in temp_pdfs:
+        pdf_path = temp_pdfs[pdf_id]
+        if os.path.exists(pdf_path):
+            return FileResponse(
+                pdf_path,
+                media_type="application/pdf",
+                filename=f"prescription_{pdf_id}.pdf"
+            )
+    
+    raise HTTPException(status_code=404, detail="PDF not found")
+
 @app.post("/send-fax", response_model=ApiResponse)
 async def send_fax(form_data: FormData):
     """
@@ -34,19 +52,38 @@ async def send_fax(form_data: FormData):
         data = form_data.dict(by_alias=True)
         
         # Step 1: Generate PDF from form data
-        import tempfile
+        import uuid
+        pdf_id = str(uuid.uuid4())[:8]  # Short unique ID
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             pdf_path = generate_pdf(data, temp_file.name)
         
-        # Step 2: Send PDF as fax
-        fax_result = fax_sender.send_pdf_as_fax(
-            pdf_path=pdf_path,
+        # Store PDF for serving
+        temp_pdfs[pdf_id] = pdf_path
+        
+        # Step 2: Create public URL for the PDF
+        # In production, this would be your actual domain
+        base_url = "https://webflow-form.onrender.com"  # Your Render URL
+        pdf_url = f"{base_url}/pdf/{pdf_id}"
+        
+        # Step 3: Send PDF as fax using the public URL
+        fax_result = fax_sender.send_pdf_with_url(
+            pdf_url=pdf_url,
             fax_number=PHARMACY_FAX_NUMBER,
             filename="refill_order.pdf"
         )
         
-        # Step 3: Clean up temporary file
-        fax_sender.cleanup_temp_file(pdf_path)
+        # Step 4: Clean up temporary file after some delay
+        # (Give time for fax to be sent)
+        import threading
+        def cleanup_later():
+            import time
+            time.sleep(300)  # Wait 5 minutes
+            if pdf_id in temp_pdfs:
+                fax_sender.cleanup_temp_file(temp_pdfs[pdf_id])
+                del temp_pdfs[pdf_id]
+        
+        threading.Thread(target=cleanup_later, daemon=True).start()
         
         if fax_result["success"]:
             return ApiResponse(
