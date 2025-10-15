@@ -54,7 +54,7 @@ async def serve_pdf(pdf_id: str):
     raise HTTPException(status_code=404, detail="PDF not found")
 
 @app.post("/send-fax", response_model=ApiResponse)
-async def send_fax(form_data: FormData):
+async def send_fax(request: Request):
     """
     Endpoint to receive form data, generate PDF, and send it as fax.
     
@@ -62,8 +62,48 @@ async def send_fax(form_data: FormData):
     and sends it as a fax using the Sinch API.
     """
     try:
-        # Convert Pydantic model to dict using field aliases
-        data = form_data.dict(by_alias=True)
+        # Get raw JSON data from request
+        raw_data = await request.json()
+        
+        # Log the incoming data for debugging
+        print(f"Received form data: {raw_data}")
+        
+        # Map common Webflow field variations to our expected format
+        data = {}
+        
+        # Map field names (handle various formats Webflow might send)
+        field_mappings = {
+            'OR-Name': ['OR-Name', 'OR_Name', 'first_name', 'firstName', 'name'],
+            'OR-Last-name': ['OR-Last-name', 'OR_Last_name', 'last_name', 'lastName', 'surname'],
+            'OR-Phone-number': ['OR-Phone-number', 'OR_Phone_number', 'phone_number', 'phoneNumber', 'phone', 'telephone'],
+            'OR-Medication': ['OR-Medication', 'OR_Medication', 'medication', 'medications', 'drugs'],
+            'OR-note': ['OR-note', 'OR_note', 'note', 'notes', 'special_instructions', 'comments'],
+            'delivery_option': ['delivery_option', 'deliveryOption', 'delivery', 'pickup_option'],
+            'address': ['address', 'delivery_address', 'deliveryAddress', 'street_address'],
+            'time_slot': ['time_slot', 'timeSlot', 'preferred_time', 'time_preference']
+        }
+        
+        # Try to map each expected field
+        for expected_field, possible_names in field_mappings.items():
+            for name in possible_names:
+                if name in raw_data:
+                    data[expected_field] = raw_data[name]
+                    break
+        
+        # Validate required fields
+        required_fields = ['OR-Name', 'OR-Last-name', 'OR-Phone-number', 'OR-Medication']
+        missing_fields = []
+        for field in required_fields:
+            if field not in data or not data[field]:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=422, 
+                detail=f"Missing required fields: {', '.join(missing_fields)}. Received data: {raw_data}"
+            )
+        
+        print(f"Mapped form data: {data}")
         
         # Step 1: Generate PDF from form data
         import uuid
@@ -215,6 +255,27 @@ async def get_fax_status(fax_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/debug-form-data")
+async def debug_form_data(request: Request):
+    """
+    Debug endpoint to see exactly what data Webflow is sending.
+    Use this to troubleshoot form field mapping issues.
+    """
+    try:
+        raw_data = await request.json()
+        return {
+            "status": "debug",
+            "message": "Form data received successfully",
+            "received_data": raw_data,
+            "field_names": list(raw_data.keys()) if isinstance(raw_data, dict) else "Not a dictionary",
+            "data_types": {k: type(v).__name__ for k, v in raw_data.items()} if isinstance(raw_data, dict) else "Not a dictionary"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error processing request: {str(e)}"
+        }
+
 @app.get("/", response_model=HealthResponse)
 async def root():
     """Health check endpoint"""
@@ -227,6 +288,7 @@ async def root():
             "send_fax": "/send-fax",
             "generate_pdf": "/generate-pdf",
             "send_fax_from_file": "/send-fax-from-file",
-            "fax_status": "/fax-status/{fax_id}"
+            "fax_status": "/fax-status/{fax_id}",
+            "debug_form_data": "/debug-form-data"
         }
     )
