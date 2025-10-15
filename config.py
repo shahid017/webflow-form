@@ -2,6 +2,10 @@
 Configuration settings for the Webflow form to fax application.
 """
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Sinch API Configuration
 SINCH_ACCESS_KEY = os.getenv("SINCH_ACCESS_KEY")
