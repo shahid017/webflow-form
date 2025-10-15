@@ -21,7 +21,7 @@ class FormData(BaseModel):
     time_slot: Optional[str] = Field(None, description="Preferred time slot", example="2:00 PM - 4:00 PM")
     
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
         json_schema_extra = {
             "example": {
                 "OR-Name": "John",

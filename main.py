@@ -5,7 +5,7 @@ load_dotenv()
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 import os
-from pdf_generator import PDFGenerator
+from pdf_generator import generate_pdf
 from fax_sender import FaxSender
 from config import PHARMACY_FAX_NUMBER
 from models import FormData, SendFaxFromFileRequest, ApiResponse, HealthResponse
@@ -19,7 +19,6 @@ app = FastAPI(
 )
 
 # Initialize services
-pdf_generator = PDFGenerator()
 fax_sender = FaxSender()
 
 @app.post("/send-fax", response_model=ApiResponse)
@@ -35,7 +34,9 @@ async def send_fax(form_data: FormData):
         data = form_data.dict(by_alias=True)
         
         # Step 1: Generate PDF from form data
-        pdf_path = pdf_generator.generate_pdf(data, save_permanently=False)
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            pdf_path = generate_pdf(data, temp_file.name)
         
         # Step 2: Send PDF as fax
         fax_result = fax_sender.send_pdf_as_fax(
@@ -79,7 +80,10 @@ async def generate_pdf_only(form_data: FormData):
         data = form_data.dict(by_alias=True)
         
         # Generate PDF and save permanently
-        pdf_path = pdf_generator.generate_pdf(data, save_permanently=True)
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{data.get('OR-Name', 'Unknown')}_{data.get('OR-Last-name', 'User')}_{timestamp}.pdf"
+        pdf_path = generate_pdf(data, filename)
         
         return ApiResponse(
             status="success",
