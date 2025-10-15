@@ -42,7 +42,6 @@ PDF_SAVE_DIR = os.getenv("PDF_SAVE_DIR", "generated_pdfs")
 
 # Sinch API URLs
 SINCH_FAX_API_URL = "https://fax.api.sinch.com/v3/projects"
-SINCH_MEDIA_API_URL = "https://media.api.sinch.com/v1/projects"
 
 # File Upload Configuration
 UPLOAD_ENABLED = os.getenv("UPLOAD_ENABLED", "true").lower() == "true"

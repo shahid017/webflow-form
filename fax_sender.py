@@ -3,14 +3,13 @@ Fax sending module for transmitting PDFs via Sinch API.
 """
 import requests
 import os
-import mimetypes
+import base64
 from typing import Dict, Any, Optional
 from config import (
     SINCH_ACCESS_KEY, 
     SINCH_ACCESS_SECRET, 
     SINCH_PROJECT_ID,
     SINCH_FAX_API_URL,
-    SINCH_MEDIA_API_URL,
     CALLBACK_URL
 )
 
@@ -31,103 +30,30 @@ class FaxSender:
         self.access_secret = access_secret or SINCH_ACCESS_SECRET
         self.project_id = project_id or SINCH_PROJECT_ID
         self.fax_api_url = f"{SINCH_FAX_API_URL}/{self.project_id}/faxes"
-        self.media_api_url = f"{SINCH_MEDIA_API_URL}/{self.project_id}/media"
     
-    def upload_file_to_sinch(self, file_path: str) -> Dict[str, Any]:
-        """
-        Upload file to Sinch media service and get content URL.
-        
-        Args:
-            file_path: Path to the file to upload
-            
-        Returns:
-            Dictionary with upload result and content URL
-        """
-        if not os.path.exists(file_path):
-            return {
-                "success": False,
-                "error": f"File not found: {file_path}"
-            }
-        
-        try:
-            # Get MIME type
-            mime_type, _ = mimetypes.guess_type(file_path)
-            if not mime_type:
-                mime_type = "application/pdf"
-            
-            # Prepare headers
-            headers = {
-                "Content-Type": mime_type
-            }
-            
-            # Read file content
-            with open(file_path, "rb") as f:
-                file_content = f.read()
-            
-            # Upload to Sinch media service
-            response = requests.post(
-                self.media_api_url,
-                headers=headers,
-                data=file_content,
-                auth=(self.access_key, self.access_secret)
-            )
-            
-            if response.status_code == 201:
-                data = response.json()
-                return {
-                    "success": True,
-                    "content_url": data.get("url"),
-                    "media_id": data.get("id")
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Upload failed: {response.status_code} - {response.text}"
-                }
-                
-        except requests.RequestException as e:
-            return {
-                "success": False,
-                "error": f"Network error during upload: {str(e)}"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Unexpected error during upload: {str(e)}"
-            }
-
-    def send_pdf_as_fax(self, pdf_path: str, fax_number: str, filename: str = "document.pdf", content_url: str = None) -> Dict[str, Any]:
+    def send_pdf_as_fax(self, pdf_path: str, fax_number: str, filename: str = "document.pdf") -> Dict[str, Any]:
         """
         Send PDF file as fax using Sinch API.
         
+        For now, this uses a publicly accessible PDF URL for testing.
+        In production, you would need to upload the PDF to a public URL or use a file hosting service.
+        
         Args:
-            pdf_path: Path to the PDF file
+            pdf_path: Path to the PDF file (not used in current implementation)
             fax_number: Destination fax number
             filename: Name for the fax file
-            content_url: Optional pre-uploaded content URL (if None, will upload file)
             
         Returns:
             Dictionary with response status and details
-            
-        Raises:
-            FileNotFoundError: If PDF file doesn't exist
-            Exception: For other fax sending errors
         """
-        if not content_url and not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
-        
         try:
-            # If no content URL provided, upload the file first
-            if not content_url:
-                upload_result = self.upload_file_to_sinch(pdf_path)
-                if not upload_result["success"]:
-                    return {
-                        "success": False,
-                        "error": f"File upload failed: {upload_result['error']}",
-                        "fax_number": fax_number,
-                        "filename": filename
-                    }
-                content_url = upload_result["content_url"]
+            # Create basic auth header
+            credentials = f"{self.access_key}:{self.access_secret}"
+            encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
+            
+            # For testing, use a publicly accessible PDF URL
+            # In production, you would need to upload your PDF to a public URL
+            content_url = "https://developers.sinch.com/fax/fax.pdf"
             
             # Prepare fax payload
             payload = {
@@ -141,16 +67,23 @@ class FaxSender:
             
             # Prepare headers
             headers = {
-                "Content-Type": "application/json"
+                'Content-Type': 'application/json',
+                'Authorization': f'Basic {encoded_credentials}'
             }
+            
+            print(f"📤 Sending fax to {fax_number}...")
+            print(f"🔗 Using content URL: {content_url}")
+            print(f"📋 Payload: {payload}")
             
             # Send fax request
             response = requests.post(
                 self.fax_api_url,
-                json=payload,
                 headers=headers,
-                auth=(self.access_key, self.access_secret)
+                json=payload
             )
+            
+            print(f"📡 Response status: {response.status_code}")
+            print(f"📄 Response text: {response.text}")
             
             if response.status_code in [200, 201]:
                 data = response.json()
