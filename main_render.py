@@ -15,9 +15,13 @@ app = FastAPI(title="Webflow Form to Fax API", version="1.0.0")
 # Add CORS middleware for Webflow integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your Webflow domain
+    allow_origins=[
+        "https://westmount-pharmacy.webflow.io",  # Your Webflow domain
+        "http://localhost:3000",  # For local development
+        "http://localhost:8080",  # Alternative local port
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

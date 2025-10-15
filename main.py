@@ -4,6 +4,7 @@ load_dotenv()
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import tempfile
 from pdf_generator import generate_pdf
@@ -17,6 +18,19 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
+)
+
+# Add CORS middleware for Webflow integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://westmount-pharmacy.webflow.io",  # Your Webflow domain
+        "http://localhost:3000",  # For local development
+        "http://localhost:8080",  # Alternative local port
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 # Initialize services
