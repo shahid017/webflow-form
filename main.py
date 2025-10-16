@@ -104,8 +104,8 @@ async def send_signup_fax(request: Request):
             'first_name': ['Form-first-name', 'Form first name', 'first_name', 'firstName', 'fname', 'first-name'],
             'last_name': ['Form-last-name', 'Form last name', 'last_name', 'lastName', 'lname', 'last-name', 'surname'],
             'phone': ['Form-phone-number', 'Form phone number', 'phone', 'phone_number', 'phoneNumber', 'telephone', 'mobile'],
-            'date_of_birth': ['Form-date-of-brith', 'Form Phone Number 2', 'date_of_birth', 'dateOfBirth', 'dob', 'birth_date', 'birthdate'],
-            'address': ['address-input', 'Form transfer', 'address', 'street_address', 'streetAddress', 'street'],
+            'date_of_birth': ['Form-phone-number-2', 'Form-date-of-brith', 'Form Phone Number 2', 'date_of_birth', 'dateOfBirth', 'dob', 'birth_date', 'birthdate'],
+            'address': ['Form-transfer', 'address-input', 'Form transfer', 'address', 'street_address', 'streetAddress', 'street'],
             'area': ['Form-area', 'Form area', 'area', 'city', 'town', 'region'],
             'email': ['email', 'email_address', 'emailAddress', 'e-mail'],  # Keep as optional
             'emergency_contact': ['emergency_contact', 'emergencyContact', 'emergency_name'],  # Keep as optional
@@ -117,7 +117,12 @@ async def send_signup_fax(request: Request):
         for expected_field, possible_names in field_mappings.items():
             for name in possible_names:
                 if name in raw_data:
-                    data[expected_field] = raw_data[name]
+                    value = raw_data[name]
+                    # Only use the value if it's not empty, or if we don't have a value yet
+                    if value and value.strip() and (expected_field not in data or not data[expected_field].strip()):
+                        data[expected_field] = value.strip()
+                    elif expected_field not in data:
+                        data[expected_field] = value
                     break
         
         # Validate required fields (based on actual Webflow form)
