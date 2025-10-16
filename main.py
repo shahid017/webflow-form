@@ -7,10 +7,10 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import tempfile
-from pdf_generator import generate_pdf
+from pdf_generator import generate_pdf, generate_signup_pdf
 from fax_sender import FaxSender
 from config import PHARMACY_FAX_NUMBER
-from models import FormData, SendFaxFromFileRequest, ApiResponse, HealthResponse
+from models import FormData, SignupData, SendFaxFromFileRequest, ApiResponse, HealthResponse
 
 app = FastAPI(
     title="Webflow Form to Fax API",
@@ -52,6 +52,123 @@ async def serve_pdf(pdf_id: str):
             )
     
     raise HTTPException(status_code=404, detail="PDF not found")
+
+@app.post("/send-signup-fax", response_model=ApiResponse)
+async def send_signup_fax(request: Request):
+    """
+    Endpoint to receive signup form data, generate PDF, and send it as fax.
+    
+    This endpoint accepts signup form data from Webflow, generates a PDF document,
+    and sends it as a fax using the Sinch API.
+    """
+    try:
+        # Get content type to determine how to parse the data
+        content_type = request.headers.get("content-type", "")
+        
+        # Parse data based on content type
+        if "application/json" in content_type:
+            raw_data = await request.json()
+            print(f"Received JSON signup data: {raw_data}")
+        else:
+            # Handle form-encoded data (application/x-www-form-urlencoded)
+            form_data = await request.form()
+            raw_data = dict(form_data)
+            print(f"Received form signup data: {raw_data}")
+        
+        # Log the incoming data for debugging
+        print(f"Content-Type: {content_type}")
+        print(f"Parsed signup data: {raw_data}")
+        
+        # Map common Webflow field variations to our expected format
+        data = {}
+        
+        # Map field names (handle various formats Webflow might send)
+        field_mappings = {
+            'first_name': ['first_name', 'firstName', 'fname', 'first-name'],
+            'last_name': ['last_name', 'lastName', 'lname', 'last-name', 'surname'],
+            'email': ['email', 'email_address', 'emailAddress', 'e-mail'],
+            'phone': ['phone', 'phone_number', 'phoneNumber', 'telephone', 'mobile'],
+            'date_of_birth': ['date_of_birth', 'dateOfBirth', 'dob', 'birth_date', 'birthdate'],
+            'address': ['address', 'street_address', 'streetAddress', 'street'],
+            'city': ['city', 'town'],
+            'state': ['state', 'province', 'region'],
+            'postal_code': ['postal_code', 'postalCode', 'zip_code', 'zipCode', 'zip'],
+            'emergency_contact': ['emergency_contact', 'emergencyContact', 'emergency_name'],
+            'emergency_phone': ['emergency_phone', 'emergencyPhone', 'emergency_number'],
+            'notes': ['notes', 'comments', 'additional_info', 'special_instructions']
+        }
+        
+        # Try to map each expected field
+        for expected_field, possible_names in field_mappings.items():
+            for name in possible_names:
+                if name in raw_data:
+                    data[expected_field] = raw_data[name]
+                    break
+        
+        # Validate required fields
+        required_fields = ['first_name', 'last_name', 'email', 'phone']
+        missing_fields = []
+        for field in required_fields:
+            if field not in data or not data[field]:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=422, 
+                detail=f"Missing required fields: {', '.join(missing_fields)}. Received data: {raw_data}"
+            )
+        
+        print(f"Mapped signup form data: {data}")
+        
+        # Step 1: Generate PDF from signup form data
+        import uuid
+        pdf_id = str(uuid.uuid4())[:8]  # Short unique ID
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            pdf_path = generate_signup_pdf(data, temp_file.name)
+        
+        # Store PDF for serving
+        temp_pdfs[pdf_id] = pdf_path
+        
+        # Step 2: Create public URL for the PDF
+        base_url = "https://webflow-form.onrender.com"  # Your Render URL
+        pdf_url = f"{base_url}/pdf/{pdf_id}"
+        
+        # Step 3: Send PDF as fax using the public URL
+        fax_result = fax_sender.send_pdf_with_url(
+            pdf_url=pdf_url,
+            fax_number=PHARMACY_FAX_NUMBER,  # You can change this to a different fax number for signups
+            filename="patient_registration.pdf"
+        )
+        
+        # Step 4: Clean up temporary file after some delay
+        import threading
+        def cleanup_later():
+            import time
+            time.sleep(300)  # Wait 5 minutes
+            if pdf_id in temp_pdfs:
+                fax_sender.cleanup_temp_file(temp_pdfs[pdf_id])
+                del temp_pdfs[pdf_id]
+        
+        threading.Thread(target=cleanup_later, daemon=True).start()
+        
+        if fax_result["success"]:
+            return ApiResponse(
+                status="success",
+                message="Signup PDF generated and fax sent successfully",
+                fax_id=fax_result.get("fax_id"),
+                fax_number=fax_result["fax_number"],
+                response_data=fax_result["response_data"]
+            )
+        else:
+            return ApiResponse(
+                status="error",
+                message="Signup PDF generated but fax failed",
+                error=fax_result["error"]
+            )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/send-fax", response_model=ApiResponse)
 async def send_fax(request: Request):
@@ -312,6 +429,7 @@ async def root():
         endpoints={
             "docs": "/docs",
             "send_fax": "/send-fax",
+            "send_signup_fax": "/send-signup-fax",
             "generate_pdf": "/generate-pdf",
             "send_fax_from_file": "/send-fax-from-file",
             "fax_status": "/fax-status/{fax_id}",

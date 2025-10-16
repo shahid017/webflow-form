@@ -65,6 +65,45 @@ class ApiResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if status is error")
 
 
+class SignupData(BaseModel):
+    """Model for signup form submission data"""
+    
+    # Required fields - adjust based on your actual form fields
+    first_name: str = Field(..., description="First name", example="John")
+    last_name: str = Field(..., description="Last name", example="Smith")
+    email: str = Field(..., description="Email address", example="john@example.com")
+    phone: str = Field(..., description="Phone number", example="555-123-4567")
+    
+    # Optional fields - add more as needed
+    date_of_birth: Optional[str] = Field(None, description="Date of birth", example="1990-01-01")
+    address: Optional[str] = Field(None, description="Street address", example="123 Main St")
+    city: Optional[str] = Field(None, description="City", example="Anytown")
+    state: Optional[str] = Field(None, description="State/Province", example="CA")
+    postal_code: Optional[str] = Field(None, description="Postal/ZIP code", example="12345")
+    emergency_contact: Optional[str] = Field(None, description="Emergency contact name", example="Jane Smith")
+    emergency_phone: Optional[str] = Field(None, description="Emergency contact phone", example="555-987-6543")
+    notes: Optional[str] = Field(None, description="Additional notes or comments", example="Special dietary requirements")
+    
+    class Config:
+        populate_by_name = True
+        json_schema_extra = {
+            "example": {
+                "first_name": "John",
+                "last_name": "Smith",
+                "email": "john.smith@example.com",
+                "phone": "555-123-4567",
+                "date_of_birth": "1990-01-01",
+                "address": "123 Main Street",
+                "city": "Anytown",
+                "state": "CA",
+                "postal_code": "12345",
+                "emergency_contact": "Jane Smith",
+                "emergency_phone": "555-987-6543",
+                "notes": "Prefers morning appointments"
+            }
+        }
+
+
 class HealthResponse(BaseModel):
     """Health check response model"""
     
