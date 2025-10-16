@@ -66,36 +66,51 @@ async def send_signup_fax(request: Request):
         content_type = request.headers.get("content-type", "")
         
         # Parse data based on content type
+        raw_data = {}
         if "application/json" in content_type:
-            raw_data = await request.json()
-            print(f"Received JSON signup data: {raw_data}")
+            try:
+                raw_data = await request.json()
+                print(f"Received JSON signup data: {raw_data}")
+            except Exception as e:
+                print(f"Error parsing JSON: {e}")
+                raw_data = {}
         else:
             # Handle form-encoded data (application/x-www-form-urlencoded)
-            form_data = await request.form()
-            raw_data = dict(form_data)
-            print(f"Received form signup data: {raw_data}")
+            try:
+                form_data = await request.form()
+                raw_data = dict(form_data)
+                print(f"Received form signup data: {raw_data}")
+            except Exception as e:
+                print(f"Error parsing form data: {e}")
+                raw_data = {}
         
         # Log the incoming data for debugging
         print(f"Content-Type: {content_type}")
         print(f"Parsed signup data: {raw_data}")
+        print(f"Raw form data keys: {list(raw_data.keys()) if raw_data else 'No data'}")
+        
+        # Check if we have any data
+        if not raw_data:
+            raise HTTPException(
+                status_code=400, 
+                detail="No form data received. Please ensure you're sending the required signup form fields."
+            )
         
         # Map common Webflow field variations to our expected format
         data = {}
         
         # Map field names (handle various formats Webflow might send)
         field_mappings = {
-            'first_name': ['first_name', 'firstName', 'fname', 'first-name'],
-            'last_name': ['last_name', 'lastName', 'lname', 'last-name', 'surname'],
-            'email': ['email', 'email_address', 'emailAddress', 'e-mail'],
-            'phone': ['phone', 'phone_number', 'phoneNumber', 'telephone', 'mobile'],
-            'date_of_birth': ['date_of_birth', 'dateOfBirth', 'dob', 'birth_date', 'birthdate'],
-            'address': ['address', 'street_address', 'streetAddress', 'street'],
-            'city': ['city', 'town'],
-            'state': ['state', 'province', 'region'],
-            'postal_code': ['postal_code', 'postalCode', 'zip_code', 'zipCode', 'zip'],
-            'emergency_contact': ['emergency_contact', 'emergencyContact', 'emergency_name'],
-            'emergency_phone': ['emergency_phone', 'emergencyPhone', 'emergency_number'],
-            'notes': ['notes', 'comments', 'additional_info', 'special_instructions']
+            'first_name': ['Form-first-name', 'Form first name', 'first_name', 'firstName', 'fname', 'first-name'],
+            'last_name': ['Form-last-name', 'Form last name', 'last_name', 'lastName', 'lname', 'last-name', 'surname'],
+            'phone': ['Form-phone-number', 'Form phone number', 'phone', 'phone_number', 'phoneNumber', 'telephone', 'mobile'],
+            'date_of_birth': ['Form-date-of-brith', 'Form Phone Number 2', 'date_of_birth', 'dateOfBirth', 'dob', 'birth_date', 'birthdate'],
+            'address': ['address-input', 'Form transfer', 'address', 'street_address', 'streetAddress', 'street'],
+            'area': ['Form-area', 'Form area', 'area', 'city', 'town', 'region'],
+            'email': ['email', 'email_address', 'emailAddress', 'e-mail'],  # Keep as optional
+            'emergency_contact': ['emergency_contact', 'emergencyContact', 'emergency_name'],  # Keep as optional
+            'emergency_phone': ['emergency_phone', 'emergencyPhone', 'emergency_number'],  # Keep as optional
+            'notes': ['notes', 'comments', 'additional_info', 'special_instructions']  # Keep as optional
         }
         
         # Try to map each expected field
@@ -105,8 +120,8 @@ async def send_signup_fax(request: Request):
                     data[expected_field] = raw_data[name]
                     break
         
-        # Validate required fields
-        required_fields = ['first_name', 'last_name', 'email', 'phone']
+        # Validate required fields (based on actual Webflow form)
+        required_fields = ['first_name', 'last_name', 'phone']
         missing_fields = []
         for field in required_fields:
             if field not in data or not data[field]:
@@ -170,6 +185,15 @@ async def send_signup_fax(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Alternative endpoint with underscores for compatibility
+@app.post("/send_signup_fax", response_model=ApiResponse)
+async def send_signup_fax_alt(request: Request):
+    """
+    Alternative endpoint for signup form data with underscore format.
+    This redirects to the main signup endpoint for compatibility.
+    """
+    return await send_signup_fax(request)
+
 @app.post("/send-fax", response_model=ApiResponse)
 async def send_fax(request: Request):
     """
@@ -183,18 +207,35 @@ async def send_fax(request: Request):
         content_type = request.headers.get("content-type", "")
         
         # Parse data based on content type
+        raw_data = {}
         if "application/json" in content_type:
-            raw_data = await request.json()
-            print(f"Received JSON data: {raw_data}")
+            try:
+                raw_data = await request.json()
+                print(f"Received JSON data: {raw_data}")
+            except Exception as e:
+                print(f"Error parsing JSON: {e}")
+                raw_data = {}
         else:
             # Handle form-encoded data (application/x-www-form-urlencoded)
-            form_data = await request.form()
-            raw_data = dict(form_data)
-            print(f"Received form data: {raw_data}")
+            try:
+                form_data = await request.form()
+                raw_data = dict(form_data)
+                print(f"Received form data: {raw_data}")
+            except Exception as e:
+                print(f"Error parsing form data: {e}")
+                raw_data = {}
         
         # Log the incoming data for debugging
         print(f"Content-Type: {content_type}")
         print(f"Parsed data: {raw_data}")
+        print(f"Raw data keys: {list(raw_data.keys()) if raw_data else 'No data'}")
+        
+        # Check if we have any data
+        if not raw_data:
+            raise HTTPException(
+                status_code=400, 
+                detail="No form data received. Please ensure you're sending the required form fields."
+            )
         
         # Map common Webflow field variations to our expected format
         data = {}
@@ -430,6 +471,7 @@ async def root():
             "docs": "/docs",
             "send_fax": "/send-fax",
             "send_signup_fax": "/send-signup-fax",
+            "send_signup_fax_alt": "/send_signup_fax",
             "generate_pdf": "/generate-pdf",
             "send_fax_from_file": "/send-fax-from-file",
             "fax_status": "/fax-status/{fax_id}",

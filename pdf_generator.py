@@ -214,12 +214,13 @@ def generate_signup_pdf(form_data, output_filename="signup.pdf"):
         elements.append(name_label)
         elements.append(name_value)
         
-        # Email
+        # Email (optional field)
         email = form_data.get('email', '')
-        email_label = Paragraph("Email Address:", label_style)
-        email_value = Paragraph(email, value_style)
-        elements.append(email_label)
-        elements.append(email_value)
+        if email:
+            email_label = Paragraph("Email Address:", label_style)
+            email_value = Paragraph(email, value_style)
+            elements.append(email_label)
+            elements.append(email_value)
         
         # Phone Number
         phone = form_data.get('phone', '')
@@ -238,11 +239,9 @@ def generate_signup_pdf(form_data, output_filename="signup.pdf"):
         
         # Address Information
         address = form_data.get('address', '')
-        city = form_data.get('city', '')
-        state = form_data.get('state', '')
-        postal_code = form_data.get('postal_code', '')
+        area = form_data.get('area', '')  # This maps to Form-area
         
-        if any([address, city, state, postal_code]):
+        if any([address, area]):
             address_label = Paragraph("Address Information:", label_style)
             elements.append(address_label)
             
@@ -250,17 +249,9 @@ def generate_signup_pdf(form_data, output_filename="signup.pdf"):
                 address_value = Paragraph(f"Address: {address}", value_style)
                 elements.append(address_value)
             
-            if city:
-                city_value = Paragraph(f"City: {city}", value_style)
-                elements.append(city_value)
-            
-            if state:
-                state_value = Paragraph(f"State: {state}", value_style)
-                elements.append(state_value)
-            
-            if postal_code:
-                postal_value = Paragraph(f"Postal Code: {postal_code}", value_style)
-                elements.append(postal_value)
+            if area:
+                area_value = Paragraph(f"Area: {area}", value_style)
+                elements.append(area_value)
         
         # Emergency Contact
         emergency_contact = form_data.get('emergency_contact', '')
